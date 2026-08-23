@@ -7,5 +7,5 @@ node_modules
 test-results
 playwright-report
 *.log
-*.mjs.bak
-.DS_Store
+livekit.yaml
+backup.sql
