@@ -1,0 +1,127 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: comms
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-comms_dev_password}
+      POSTGRES_DB: comms
+    ports: ['5432:5432']
+    volumes: ['pgdata:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U comms -d comms']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    ports: ['6379:6379']
+    volumes: ['redisdata:/data']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://comms:${POSTGRES_PASSWORD:-comms_dev_password}@postgres:5432/comms
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD}
+      BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-Administrator}
+    ports: ['3000:3000']
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-comms_minio_user}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-comms_minio_password}
+    ports: ['9000:9000', '9001:9001']   # 9001 is the web console
+    volumes: ['miniodata:/data']
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  clamav:
+    image: clamav/clamav:stable
+    ports: ['3310:3310']
+    volumes: ['clamavdb:/var/lib/clamav']
+    # First start downloads the signature database (~250MB) and can take
+    # several minutes. The container is not usable until this passes.
+    healthcheck:
+      test: ['CMD', 'clamdscan', '--ping', '1']
+      interval: 15s
+      timeout: 10s
+      retries: 40
+      start_period: 300s
+
+  # Self-hosted LiveKit for local development. Production can swap to LiveKit
+  # Cloud by changing LIVEKIT_URL / KEY / SECRET — the client SDK is identical.
+  # --dev uses the well-known devkey/secret pair; NEVER use it in production.
+  livekit:
+    image: livekit/livekit-server:latest
+    # NOT --dev: that mode advertises the container IP, which the browser
+    # cannot reach. See livekit.yaml.
+    command: --config /etc/livekit.yaml --bind 0.0.0.0
+    volumes: ['./livekit.yaml:/etc/livekit.yaml:ro']
+    ports:
+      - '7880:7880'            # signaling (WebSocket)
+      - '7881:7881'            # TURN/TCP fallback for restrictive networks
+      - '50000-50060:50000-50060/udp'   # media
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:7880/']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Reverse proxy. Optional: `docker compose --profile proxy up -d caddy`.
+  # Gives one HTTPS origin for the app, storage and the SFU — which is what
+  # makes camera, microphone and push work on devices other than this one.
+  caddy:
+    image: caddy:2-alpine
+    profiles: ['proxy']
+    ports: ['80:80', '443:443']
+    volumes:
+      - './Caddyfile:/etc/caddy/Caddyfile:ro'
+      - 'caddydata:/data'
+      - 'caddyconfig:/config'
+    extra_hosts:
+      # The app runs on the host with `npm run dev`, not in a container.
+      - 'host.docker.internal:host-gateway'
+
+  # Cloudflare Tunnel. `docker compose --profile tunnel up -d cloudflared`
+  #
+  # Makes the app reachable at a real HTTPS URL with no port forwarding and no
+  # certificate on any device: cloudflared dials OUT to Cloudflare, so nothing
+  # is exposed inbound.
+  #
+  # ⚠️ Carries HTTP and WebSockets only. WebRTC media is UDP and does NOT pass
+  #    through — self-hosted LiveKit calls will connect to signalling and then
+  #    fail to carry audio or video. Use LiveKit Cloud for remote calls.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ['tunnel']
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on: [caddy]
+    restart: unless-stopped
+
+volumes:
+  caddydata:
+  caddyconfig:
+  pgdata:
+  redisdata:
+  miniodata:
+  clamavdb:

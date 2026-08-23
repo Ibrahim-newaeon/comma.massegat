@@ -1,0 +1,224 @@
+/* src/app/globals.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Cairo — covers BOTH Arabic and Latin. Single family means no visible
+   font jump inside a mixed AR/EN string. Self-hosted: no external CDN,
+   which keeps the CSP connect-src at 'self'. */
+@font-face {
+  font-family: 'Cairo';
+  src: url('/fonts/Cairo-Variable.woff2') format('woff2-variations');
+  font-weight: 200 1000;
+  font-display: swap;
+  font-style: normal;
+}
+
+:root {
+  /* ── New Aeon palette ────────────────────────────────────────────────────
+     Sampled from new-aeon.com: aubergine #330333, gold #F9C01B,
+     crimson #EB3149.
+
+     TRANSLATED for a tool, not copied from the site. The site runs aubergine
+     full-bleed with gold on top — right for thirty seconds of attention,
+     fatiguing across a working day. Here the loud colour is rationed and the
+     surface does the work.
+
+     ⚠️ Gold cannot carry white text: #F9C01B against white is about 1.7:1.
+     In LIGHT mode the primary colour is therefore the aubergine, which
+     carries white cleanly, and gold appears as a tint behind dark text.
+     In DARK mode that inverts — gold on aubergine, exactly as the site's own
+     Send button does it. */
+
+  --bg: #F4F1F3;
+  /* Paper carries a faint aubergine cast rather than being neutral grey, so
+     the two themes read as one family instead of two products. */
+  --fg: #2A0329;
+  --muted: #6E5A6C;
+  --border: #DFD5DE;
+  --border-strong: #C4B2C2;
+  --surface: #EAE4E9;
+
+  /* Primary. Aubergine, because it carries white text at 13:1. */
+  --accent: #4A0A47;
+  --accent-subtle: #F3E9F2;
+  --accent-strong: #330333;
+  /* Text that sits ON the accent. */
+  --accent-on: #FFFFFF;
+
+  /* Gold — the brand's signal colour, used as a TINT behind dark text. */
+  --highlight: #8A6206;
+  --highlight-subtle: #FBF0D4;
+  --highlight-on: #FFFFFF;
+
+  --info: #2C5F9E;
+  --info-subtle: #E8EEF7;
+  --warning: #8A6206;
+  --warning-subtle: #FBF0D4;
+  --success: #1B6E4E;
+  --success-subtle: #E4F0EA;
+  /* The brand crimson doubles as danger — it already reads as a stop signal
+     on the site, where it numbers and marks. */
+  --danger: #B01E38;
+  --danger-subtle: #FBE6EA;
+}
+
+/* ---------------------------------------------------------------------------
+   Dark theme
+   Set on <html data-theme>, NOT via a media query alone: a person's OS
+   preference and their preference for THIS app are different things, and
+   someone reading a bright chat app in a dark room deserves to override the
+   machine.
+   Surfaces are near-black rather than pure #000 — pure black against white
+   text produces halation, and OLED smearing on scroll.
+   --------------------------------------------------------------------------- */
+[data-theme="dark"] {
+  /* The site's own ground. Lifted from #330333, which is rich behind hero
+     imagery but heavy under body text for hours. */
+  --bg: #2B0429;
+  --fg: #F2E9F0;
+  --muted: #B497B1;
+  --border: #4A1546;
+  --border-strong: #632560;
+  --surface: #3A0937;
+
+  /* Inverted from light: gold leads, carrying dark aubergine text — which is
+     exactly how the site's Send button works. */
+  --accent: #F9C01B;
+  --accent-subtle: #43132E;
+  --accent-strong: #FFD35C;
+  --accent-on: #2B0429;
+
+  --highlight: #F9C01B;
+  --highlight-subtle: #43132E;
+  --highlight-on: #2B0429;
+
+  --info: #7FB0E8;
+  --info-subtle: #1B2C41;
+  --warning: #F9C01B;
+  --warning-subtle: #3A2A12;
+  --success: #46C596;
+  --success-subtle: #133227;
+  --danger: #F0566C;
+  --danger-subtle: #45151F;
+}
+
+/* Follows the OS only when the user has expressed no preference of their own. */
+@media (prefers-color-scheme: dark) {
+  [data-theme="system"] {
+  /* The site's own ground. Lifted from #330333, which is rich behind hero
+     imagery but heavy under body text for hours. */
+    --bg: #2B0429;
+    --fg: #F2E9F0;
+    --muted: #B497B1;
+    --border: #4A1546;
+    --border-strong: #632560;
+    --surface: #3A0937;
+
+  /* Inverted from light: gold leads, carrying dark aubergine text — which is
+     exactly how the site's Send button works. */
+    --accent: #F9C01B;
+    --accent-subtle: #43132E;
+    --accent-strong: #FFD35C;
+  --accent-on: #2B0429;
+
+    --highlight: #F9C01B;
+    --highlight-subtle: #43132E;
+    --highlight-on: #2B0429;
+
+    --info: #7FB0E8;
+    --info-subtle: #1B2C41;
+    --warning: #F9C01B;
+    --warning-subtle: #3A2A12;
+    --success: #46C596;
+    --success-subtle: #133227;
+    --danger: #F0566C;
+    --danger-subtle: #45151F;
+  }
+}
+
+/* Native controls — checkboxes, scrollbars, date pickers — follow this. Without
+   it a dark page renders white scrollbars. */
+[data-theme="dark"] { color-scheme: dark; }
+@media (prefers-color-scheme: dark) { [data-theme="system"] { color-scheme: dark; } }
+
+/* Themed elements must not animate on theme SWITCH — a 300ms cross-fade of
+   every surface reads as a rendering fault. Transitions are opted into by
+   component, not applied globally here. */
+
+html { font-family: 'Cairo', system-ui, sans-serif; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.5;
+}
+
+/* Arabic needs more leading. NEVER apply letter-spacing or text-transform
+   to Arabic — letter-spacing breaks cursive joining, and Arabic has no case. */
+:lang(ar),
+[dir='rtl'] {
+  line-height: 1.8;
+  letter-spacing: 0;
+}
+
+[dir='rtl'] * { text-transform: none; }
+
+/* Content that must stay LTR even inside an Arabic message: code, URLs,
+   emails, file paths, phone numbers, version strings. */
+.force-ltr {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: start;
+}
+
+/* Mobile-first: 56px minimum touch targets (spec §1 rule 14). */
+.touch-target {
+  min-block-size: 56px;
+  min-inline-size: 56px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+
+/* ---------------------------------------------------------------------------
+   Message bubbles
+   Own messages carry the accent; incoming ones stay neutral. Colouring BOTH
+   sides would remove the only cue that tells them apart at a glance, which is
+   why every chat app that tried it went back.
+   --------------------------------------------------------------------------- */
+.bubble-own {
+  background: var(--accent);
+  /* NOT hardcoded white. In dark mode the accent is gold, and white on gold
+     is about 1.7:1 — unreadable. The token flips with the theme: white on
+     aubergine in light, aubergine on gold in dark, which is exactly how the
+     site's own Send button is set. */
+  color: var(--accent-on);
+}
+
+.bubble-other {
+  background: var(--surface);
+  color: var(--fg);
+}
+
+/* Channel and group markers pick from a fixed palette in ChannelList, keyed on
+   the channel id, so a group keeps its colour everywhere. */
+
+
+/* Flash when jumping to a quoted message. Without it the scroll lands and the
+   reader has to work out WHICH message they were sent to. */
+@keyframes flash-highlight {
+  0%, 100% { background-color: transparent; }
+  30%      { background-color: var(--accent-subtle); }
+}
+.flash-highlight {
+  animation: flash-highlight 1.6s ease-in-out;
+  border-radius: 0.5rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Still marks the target, without the pulse. */
+  .flash-highlight { animation: none; background-color: var(--accent-subtle); }
+}

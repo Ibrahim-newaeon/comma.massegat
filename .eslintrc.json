@@ -1,0 +1,21 @@
+{
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "rules": {
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "MemberExpression[property.name='$queryRawUnsafe']",
+        "message": "BANNED: $queryRawUnsafe concatenates SQL. Use tagged-template $queryRaw."
+      },
+      {
+        "selector": "MemberExpression[property.name='$executeRawUnsafe']",
+        "message": "BANNED: $executeRawUnsafe concatenates SQL. Use tagged-template $executeRaw."
+      }
+    ],
+    "no-restricted-properties": [
+      "error",
+      { "object": "localStorage", "message": "Not permitted. Use server state." },
+      { "object": "sessionStorage", "message": "Not permitted. Use server state." }
+    ]
+  }
+}

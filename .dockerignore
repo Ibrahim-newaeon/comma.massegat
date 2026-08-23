@@ -1,0 +1,11 @@
+node_modules
+.next
+.git
+.env
+.env.*
+!.env.example
+test-results
+playwright-report
+*.log
+*.mjs.bak
+.DS_Store

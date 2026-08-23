@@ -1,0 +1,343 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String    @id @default(uuid()) @db.Uuid
+  // CITEXT applied via manual migration (see migrations/0_init/migration.sql)
+  email              String    @unique
+  displayName        String    @map("display_name")
+  displayNameAr      String?   @map("display_name_ar")
+  role               String    @default("member")            // member | moderator | admin
+  locale             String    @default("en")                // en | ar
+  /// light | dark | system. Stored per USER, not per browser: signing in on a
+  /// colleague's machine should not inherit their eye preference.
+  theme              String    @default("system")
+  /// approved | pending | rejected.
+  /// Self-registered accounts start PENDING: an account that can read every
+  /// channel the moment it is created is a self-service door into the company's
+  /// conversations. Admin-created accounts are approved on creation.
+  approvalStatus     String    @default("approved") @map("approval_status")
+  /// How the account came to exist. Distinguishes a self-registration from an
+  /// admin invitation in the audit trail, where it matters.
+  createdVia         String    @default("admin") @map("created_via")
+  numeralPref        String    @default("latn") @map("numeral_pref")
+  isActive           Boolean   @default(true) @map("is_active")
+  mustChangePassword Boolean   @default(true) @map("must_change_password")
+  totpSecretEnc      String?   @map("totp_secret_enc")
+  totpEnabled        Boolean   @default(false) @map("totp_enabled")
+  createdById        String?   @map("created_by") @db.Uuid
+  createdAt          DateTime  @default(now()) @map("created_at")
+  deactivatedAt      DateTime? @map("deactivated_at")
+
+  identities     AuthIdentity[]
+  refreshTokens  RefreshToken[]
+  pushSubscriptions PushSubscription[]
+  setupTokens    SetupToken[]
+  channelMembers ChannelMember[]
+  reactions       Reaction[]
+  messages       Message[]
+  attachments    Attachment[]
+  callsStarted   CallSession[]
+  callParticipations CallParticipant[]
+
+  @@map("users")
+}
+
+/// Password hash lives HERE, never on User.
+/// Adding SSO later = insert rows with provider='google'|'microsoft'. No migration.
+model AuthIdentity {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  provider     String                                          // password | google | microsoft
+  providerUid  String   @map("provider_uid")
+  passwordHash String?  @map("password_hash")                  // NULL for OIDC providers
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUid])
+  @@map("auth_identities")
+}
+
+/// Rotating refresh tokens. familyId tracks the rotation lineage so that
+/// reuse of a consumed token can revoke the entire family.
+model RefreshToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  familyId   String    @map("family_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  revokedAt  DateTime? @map("revoked_at")
+  revokedReason String? @map("revoked_reason")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  /// Device context, captured at LOGIN and carried through rotation. A user
+  /// cannot recognise "session 7f3a…" but does recognise "Chrome on Windows".
+  userAgent  String?   @map("user_agent")
+  ipAddress  String?   @map("ip_address")
+  /// Authentication methods for this family: ['pwd'] or ['pwd','otp'].
+  /// Lives on the FAMILY, not the access token — otherwise rotation silently
+  /// downgrades a 2FA-verified session 15 minutes after login.
+  amr        Json?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, familyId])
+  @@index([userId, revokedAt])
+  @@map("refresh_tokens")
+}
+
+/// One-time account setup link. Admin NEVER sees a plaintext password.
+model SetupToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("setup_tokens")
+}
+
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String
+  targetType String?  @map("target_type")
+  targetId   String?  @map("target_id")
+  metadata   Json?
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_log")
+}
+
+
+// ---------------------------------------------------------------------------
+// Phase 1 — chat
+// ---------------------------------------------------------------------------
+
+/// DMs are channels with type='dm' and exactly two members.
+/// One code path for group chat and DMs, not two.
+model Channel {
+  id         String    @id @default(uuid()) @db.Uuid
+  slug       String    @unique
+  name       String
+  topic      String?
+  type       String                                     // public | private | dm
+  createdBy  String    @map("created_by") @db.Uuid
+  createdAt  DateTime  @default(now()) @map("created_at")
+  archivedAt DateTime? @map("archived_at")
+
+  members  ChannelMember[]
+  messages Message[]
+  calls    CallSession[]
+
+  @@index([type])
+  @@map("channels")
+}
+
+model ChannelMember {
+  channelId         String    @map("channel_id") @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  role              String    @default("member")
+  lastReadMessageId String?   @map("last_read_message_id") @db.Uuid
+  lastReadSeq       BigInt    @default(0) @map("last_read_seq")
+  mutedUntil        DateTime? @map("muted_until")
+  joinedAt          DateTime  @default(now()) @map("joined_at")
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([channelId, userId])
+  @@index([userId])
+  @@map("channel_members")
+}
+
+/// One emoji from one person on one message.
+///
+/// A row per (message, user, emoji) rather than a JSON blob on Message: two
+/// people reacting at the same moment would otherwise read-modify-write the
+/// same column and one would silently lose. A unique constraint makes the
+/// same reaction twice impossible at the database level, not just in the UI.
+model Reaction {
+  id        String   @id @default(uuid()) @db.Uuid
+  messageId String   @map("message_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  /// The literal emoji character, not a shortcode. Shortcodes need a lookup
+  /// table that drifts from whatever the client actually rendered.
+  emoji     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+  @@map("reactions")
+}
+
+model Message {
+  id          String    @id @default(uuid()) @db.Uuid
+  channelId   String    @map("channel_id") @db.Uuid
+  senderId    String    @map("sender_id") @db.Uuid
+  body        String?
+  bodyLang    String?   @map("body_lang")                // ar | en | mixed
+  replyToId   String?   @map("reply_to_id") @db.Uuid     // threads land in a later phase
+  clientMsgId String    @map("client_msg_id")            // idempotency key
+  /// user | system. System messages render as centred notices, not bubbles.
+  /// senderId is still set — attributed to whoever started the call — so the
+  /// column stays non-null and every existing query keeps working.
+  kind        String    @default("user")
+  /// Arabic-normalised copy of body, written by the app on create and edit.
+  /// The tsvector is a GENERATED column over this — see post-migrate.sql.
+  /// Normalisation lives in JS so there is ONE implementation, shared by the
+  /// indexer and the query path. A Postgres function would be a second one.
+  searchText  String?   @map("search_text")
+  /// Structured payload for system messages, e.g. call duration and headcount.
+  systemData  Json?     @map("system_data")
+  /// Ordering key. NEVER sort by client clock — clocks disagree across machines.
+  seq         BigInt    @default(autoincrement())
+  editedAt    DateTime? @map("edited_at")
+  deletedAt   DateTime? @map("deleted_at")
+  deletedBy   String?   @map("deleted_by") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  channel     Channel      @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  sender      User         @relation(fields: [senderId], references: [id])
+  attachments Attachment[]
+  reactions   Reaction[]
+
+  /// Self-relation for inline replies. onDelete: SetNull, not Cascade —
+  /// deleting an original must not take every reply to it with it. The reply
+  /// survives and its quote becomes a tombstone.
+  replyTo   Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   Message[] @relation("MessageReplies")
+
+  /// Makes a retried socket emit idempotent — a retry cannot duplicate a row.
+  @@unique([senderId, clientMsgId])
+  @@index([channelId, seq(sort: Desc)])
+  @@map("messages")
+}
+
+
+// ---------------------------------------------------------------------------
+// Phase 2 — files
+// ---------------------------------------------------------------------------
+
+model Attachment {
+  id         String  @id @default(uuid()) @db.Uuid
+  /// Null until the message carrying this attachment is actually sent.
+  messageId  String? @map("message_id") @db.Uuid
+  channelId  String  @map("channel_id") @db.Uuid
+  uploaderId String  @map("uploader_id") @db.Uuid
+
+  /// Object key. ASCII-sanitised — never raw UTF-8 in a key.
+  storageKey String @unique @map("storage_key")
+  /// Original filename, UTF-8, untouched. Arabic names live here intact.
+  filename   String
+  /// VERIFIED by magic bytes at completion — not the client's declared type.
+  mimeType   String @map("mime_type")
+  /// What the client CLAIMED. Kept for audit when the two disagree.
+  declaredMimeType String? @map("declared_mime_type")
+  sizeBytes  BigInt @map("size_bytes")
+
+  /// pending | clean | infected | error | rejected
+  scanStatus   String    @default("pending") @map("scan_status")
+  scanDetail   String?   @map("scan_detail")
+  scannedAt    DateTime? @map("scanned_at")
+  thumbnailKey String?   @map("thumbnail_key")
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  completedAt DateTime? @map("completed_at")
+  purgeAfter  DateTime? @map("purge_after")
+
+  message  Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  uploader User     @relation(fields: [uploaderId], references: [id])
+
+  @@index([channelId])
+  @@index([uploaderId])
+  @@index([scanStatus])
+  @@map("attachments")
+}
+
+
+// ---------------------------------------------------------------------------
+// Phase 3 — video
+//
+// Metadata only. NO media is recorded — see MEGA-PROMPT D5. Recording carries
+// consent obligations that vary by jurisdiction and were ruled out of scope.
+// ---------------------------------------------------------------------------
+
+model CallSession {
+  id        String    @id @default(uuid()) @db.Uuid
+  /// LiveKit room name. Derived from the channel — never client-supplied.
+  /// NOT unique: a channel hosts many calls over time. Reuse of a LIVE session
+  /// is handled by findFirst({ endedAt: null }). A unique constraint here meant
+  /// the SECOND call in any channel failed with P2002.
+  roomName  String    @map("room_name")
+  channelId String    @map("channel_id") @db.Uuid
+  type      String                                        // direct | group
+  startedBy String    @map("started_by") @db.Uuid
+  startedAt DateTime  @default(now()) @map("started_at")
+  endedAt   DateTime? @map("ended_at")
+  endReason String?   @map("end_reason")
+
+  channel      Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  starter      User              @relation(fields: [startedBy], references: [id])
+  participants CallParticipant[]
+
+  @@index([channelId, startedAt(sort: Desc)])
+  @@map("call_sessions")
+}
+
+model CallParticipant {
+  id        String    @id @default(uuid()) @db.Uuid
+  sessionId String    @map("session_id") @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  joinedAt  DateTime  @default(now()) @map("joined_at")
+  leftAt    DateTime? @map("left_at")
+
+  session CallSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user    User        @relation(fields: [userId], references: [id])
+
+  @@index([sessionId])
+  @@index([userId])
+  @@map("call_participants")
+}
+
+
+// ---------------------------------------------------------------------------
+// Phase 4 — notifications
+// ---------------------------------------------------------------------------
+
+/// One row per device. A person with a laptop and a phone has two.
+model PushSubscription {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  /// Browser-supplied endpoint. Unique — re-subscribing must not duplicate.
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+  lastUsedAt DateTime? @map("last_used_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}

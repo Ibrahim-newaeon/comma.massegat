@@ -1,0 +1,52 @@
+# Caddyfile
+#
+# Behind Cloudflare Tunnel, Cloudflare terminates TLS — so Caddy serves plain
+# HTTP on :80 and does the ROUTING. Without it, cloudflared can only point at
+# one service, and this app is three: the app, object storage, and the SFU.
+#
+# For a LAN deployment without a tunnel, replace `:80` with your hostname and
+# add `tls internal` — see DEPLOYMENT.md.
+
+:80 {
+	# Object storage. Presigned URLs are generated against S3_ENDPOINT, so that
+	# variable and this path must agree exactly or every signature fails.
+	# LiveKit signalling. Only relevant for SELF-HOSTED LiveKit, and only
+	# signalling — media never comes through here.
+	handle_path /rtc/* {
+		reverse_proxy livekit:7880
+	}
+
+	handle {
+		reverse_proxy host.docker.internal:3000 {
+			# CF-Connecting-IP is the real client. X-Forwarded-For behind
+			# Cloudflare contains Cloudflare's own edge address as well, so
+			# trusting the wrong one buckets the whole company as one client
+			# in the rate limiter.
+			header_up X-Forwarded-For {header.CF-Connecting-IP}
+			header_up X-Forwarded-Proto https
+		}
+	}
+}
+
+# ---------------------------------------------------------------------------
+# Storage on its OWN hostname — NOT a path on the main one.
+#
+# S3 signatures cover host and path EXACTLY. Serving MinIO under /storage means
+# stripping that prefix before forwarding, which changes the signed path and
+# makes every presigned URL fail with 403. Rewriting Host to reach the
+# container breaks the signature a second way.
+#
+# The app then fetched the object back to verify magic bytes, received an HTML
+# error page, and correctly refused it as "text/html files are not permitted" —
+# a confusing symptom of a routing fault two layers down.
+#
+# A dedicated hostname needs neither rewrite. Add it as a second public
+# hostname on the tunnel, pointed at caddy:80, with an Access BYPASS policy:
+# a presigned URL is already the authorisation and cannot carry a session.
+# ---------------------------------------------------------------------------
+:80 {
+	@storage host storage.example.com
+	handle @storage {
+		reverse_proxy minio:9000
+	}
+}

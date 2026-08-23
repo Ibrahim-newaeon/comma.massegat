@@ -1,0 +1,37 @@
+{
+  "packageId": "com.newaeon.comms",
+  "host": "comma.massegat.com",
+  "name": "Comms Platform",
+  "launcherName": "Comms",
+  "display": "standalone",
+  "themeColor": "#146B54",
+  "themeColorDark": "#16150F",
+  "navigationColor": "#146B54",
+  "navigationColorDark": "#16150F",
+  "navigationDividerColor": "#146B54",
+  "navigationDividerColorDark": "#16150F",
+  "backgroundColor": "#FAF8F3",
+  "enableNotifications": true,
+  "startUrl": "/chat",
+  "iconUrl": "https://comma.massegat.com/icon-512.png",
+  "maskableIconUrl": "https://comma.massegat.com/icon-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./android.keystore",
+    "alias": "comms"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [
+    { "name": "Chat", "shortName": "Chat", "url": "/chat" },
+    { "name": "Settings", "shortName": "Settings", "url": "/profile" }
+  ],
+  "orientation": "any",
+  "fallbackType": "customtabs",
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://comma.massegat.com/",
+  "minSdkVersion": 23,
+  "features": {}
+}
