@@ -5,8 +5,9 @@ import type { MessageDTO } from '@/lib/chat/types';
 import { AttachmentChip } from '@/components/files/AttachmentChip';
 import { Reactions } from '@/components/chat/Reactions';
 import { ReplyQuote } from '@/components/chat/ReplyQuote';
-import { Avatar } from '@/components/chat/Avatar';
-import { formatDateTime, type Locale, type Dict } from '@/lib/i18n/dict';
+import type { CSSProperties } from 'react';
+import { Avatar, colorForUser } from '@/components/chat/Avatar';
+import type { Locale, Dict } from '@/lib/i18n/dict';
 
 /**
  * TWO INDEPENDENT AXES — conflating them is the most common RTL bug.
@@ -65,43 +66,75 @@ export function MessageBubble({
 
   const isPending = message.seq === '0';
 
+  /** Stable per-sender colour, from the same palette the avatar uses. */
+  const senderColor = colorForUser(message.senderId);
+
+  /** Clock only — the day is carried by a separator, not repeated per row. */
+  const clock = new Date(message.createdAt).toLocaleTimeString(
+    locale === 'ar' ? 'ar' : 'en-GB',
+    { hour: '2-digit', minute: '2-digit' },
+  );
+
   return (
-    <div
-      // Bubble ALIGNMENT — driven by ownership, resolved via logical properties
-      // so it mirrors correctly in RTL. Not driven by text direction.
-      className={`flex gap-2 ${isOwn ? 'flex-row-reverse' : 'flex-row'} ${showSender ? 'mt-3' : 'mt-0.5'}`}
+    <article
+      /**
+       * A two-column grid, not a bubble row.
+       *
+       * Column one is a fixed time gutter on the direction-neutral edge, so a
+       * timestamp never reorders against the message it belongs to. In a
+       * bubble layout the time sits INSIDE the RTL run and jumps sides.
+       *
+       * Column two is the message itself, set as text on the page rather than
+       * inside a tinted pill. Bubbles fight bidirectional text: the tail
+       * points the wrong way and the padding is asymmetric in the wrong
+       * direction.
+       */
+      className={`group relative grid grid-cols-[54px_1fr] py-0.5 ${
+        showSender ? 'mt-4' : 'mt-0'
+      }`}
       data-testid="message-row"
       data-own={isOwn}
       data-grouped={!showSender}
     >
-      {/* Avatar column. On a grouped message the space is RESERVED but empty —
-          removing it would make consecutive messages jump left and right. */}
-      <span className="w-8 shrink-0">
-        {showSender && !isOwn && (
-          <Avatar userId={message.senderId} name={senderLabel} size={32} />
-        )}
-      </span>
-
-      <div className={`flex min-w-0 flex-col ${isOwn ? 'items-end' : 'items-start'}`}>
-      {showSender && !isOwn && (
-        <span className="mb-0.5 px-1 text-xs text-[var(--muted)]" data-testid="message-sender">
-          {/* <bdi> isolates the name so a mixed-script name cannot reorder
-              surrounding characters. */}
-          <bdi dir="auto">{senderLabel}</bdi>
-        </span>
-      )}
+      {/* Revealed on hover on desktop; always visible on touch, where there is
+          no hover and an invisible timestamp is simply missing. */}
+      <time
+        suppressHydrationWarning
+        dateTime={message.createdAt}
+        data-testid="message-time"
+        className="force-ltr pt-0.5 text-[11px] tabular-nums text-[var(--muted)] opacity-0 transition-opacity max-md:opacity-100 group-hover:opacity-100"
+      >
+        {clock}
+      </time>
 
       <div
-        className={`group relative max-w-[75%] rounded-lg px-3 py-2 ${
-          isOwn ? 'bubble-own' : 'bubble-other'
-        } ${isPending ? 'opacity-60' : ''}`}
+        className={`min-w-0 ${isPending ? 'opacity-60' : ''} ${
+          /* Own messages carry a rule in the leading margin and the faintest
+             tint — enough to distinguish sender without breaking the single
+             column the eye reads down. */
+          'msg-block border-s-2 border-[var(--sender-color)]'
+        }`}
+        data-message-id={message.id}
+        data-seq={message.seq}
+        style={{ '--sender-color': isOwn ? 'var(--accent)' : senderColor } as CSSProperties}
       >
+        {showSender && (
+          <div className="mb-0.5 flex items-center gap-2">
+            {!isOwn && <Avatar userId={message.senderId} name={senderLabel} size={20} />}
+            <span className="text-xs font-semibold text-[var(--muted)]" data-testid="message-sender">
+              {/* <bdi> isolates the name so a mixed-script name cannot
+                  reorder what surrounds it. */}
+              <bdi dir="auto">{isOwn ? dict.you : senderLabel}</bdi>
+            </span>
+          </div>
+        )}
+
         {message.replyTo && (
           <ReplyQuote reply={message.replyTo} locale={locale} dict={dict} onJump={onJump} />
         )}
 
         {message.deletedAt ? (
-          <span className="text-sm italic opacity-70" data-testid="message-deleted">
+          <span className="text-sm italic text-[var(--muted)]" data-testid="message-deleted">
             {dict.messageDeleted}
           </span>
         ) : (
@@ -110,33 +143,27 @@ export function MessageBubble({
             // algorithm. NEVER inherited from the app shell.
             dir="auto"
             data-testid="message-body"
-            data-message-id={message.id}
-            data-seq={message.seq}
-            className="whitespace-pre-wrap break-words text-sm"
+            className="msg-text whitespace-pre-wrap break-words"
           >
             {content}
           </div>
         )}
 
         {message.attachments?.length > 0 && (
-          <div data-testid="message-attachments">
+          <div data-testid="message-attachments" className="mt-1">
             {message.attachments.map((a) => (
               <AttachmentChip key={a.id} attachment={a} dict={dict} />
             ))}
           </div>
         )}
 
-        <div className="mt-1 flex items-center gap-2 text-[10px] opacity-70">
-          <time dateTime={message.createdAt} data-testid="message-time">
-            {formatDateTime(new Date(message.createdAt), locale)}
-          </time>
-          {message.editedAt && <span data-testid="message-edited">{dict.edited}</span>}
-          {isPending && <span data-testid="message-pending">{dict.sending}</span>}
-        </div>
+        {(message.editedAt || isPending) && (
+          <div className="mt-0.5 text-[10px] text-[var(--rubric,var(--highlight))]">
+            {message.editedAt && <span data-testid="message-edited">{dict.edited}</span>}
+            {isPending && <span data-testid="message-pending">{dict.sending}</span>}
+          </div>
+        )}
 
-        {/* Not on a tombstone, and not while the message is still unsent —
-            reacting to something the server has never seen has nothing to
-            attach to. */}
         {!message.deletedAt && !isPending && onReact && (
           <Reactions
             reactions={message.reactions ?? []}
@@ -145,37 +172,38 @@ export function MessageBubble({
             onToggle={(emoji) => onReact(message.id, emoji)}
           />
         )}
-
-        {/* Sits beside delete, revealed on hover like it. On touch there is
-            no hover, so both stay visible below md — a control you cannot
-            reach on a phone is not a control. */}
-        {onReply && !message.deletedAt && !isPending && (
-          <button
-            type="button"
-            onClick={() => onReply(message)}
-            data-testid={`reply-to-message-${message.id}`}
-            aria-label={dict.reply}
-            title={dict.reply}
-            className="absolute -top-2 end-9 rounded px-2 py-1 text-xs max-md:block md:hidden md:group-hover:block"
-          >
-            ↩
-          </button>
-        )}
-
-        {canDelete && !message.deletedAt && !isPending && (
-          <button
-            type="button"
-            onClick={() => onDelete?.(message.id)}
-            data-testid={`delete-message-${message.id}`}
-            aria-label={dict.deleteMessage}
-            // Logical positioning — mirrors automatically in RTL.
-            className="absolute -top-2 end-1 rounded px-2 py-1 text-xs max-md:block md:hidden md:group-hover:block"
-          >
-            ✕
-          </button>
-        )}
       </div>
-      </div>
-    </div>
+
+      {/* Row actions, in the trailing margin. Hidden until hover on desktop;
+          always present on touch, because a control you cannot reach on a
+          phone is not a control. */}
+      {!message.deletedAt && !isPending && (
+        <div className="absolute end-0 top-0 flex gap-1 max-md:flex md:hidden md:group-hover:flex">
+          {onReply && (
+            <button
+              type="button"
+              onClick={() => onReply(message)}
+              data-testid={`reply-to-message-${message.id}`}
+              aria-label={dict.reply}
+              title={dict.reply}
+              className="rounded px-2 py-0.5 text-xs text-[var(--muted)] hover:bg-[var(--surface)]"
+            >
+              ↩
+            </button>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete?.(message.id)}
+              data-testid={`delete-message-${message.id}`}
+              aria-label={dict.deleteMessage}
+              className="rounded px-2 py-0.5 text-xs text-[var(--muted)] hover:bg-[var(--surface)]"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      )}
+    </article>
   );
 }

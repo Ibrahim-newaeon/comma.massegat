@@ -27,8 +27,11 @@ COPY . .
 # The build regenerates the Prisma client. It does NOT touch the database —
 # migrations run separately at deploy time.
 # Runtime configuration does not exist during an image build — the platform
-# injects it when the container starts. Without this the build fails on
+# injects it when the container STARTS. Without this the build fails on
 # variables that are correctly set.
+#
+# ⚠️ Builder stage ONLY. The runner never sets it, so a genuinely
+# misconfigured deployment still refuses to start rather than running blind.
 ENV SKIP_ENV_VALIDATION=true
 RUN npx prisma generate && npm run build
 

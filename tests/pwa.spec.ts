@@ -1,3 +1,4 @@
+import { test, expect } from '@playwright/test';
 
 test.describe('App store verification files', () => {
   test('assetlinks.json is reachable WITHOUT a session', async ({ request }) => {

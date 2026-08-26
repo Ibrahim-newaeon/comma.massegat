@@ -18,7 +18,7 @@ try {
   // ⚠️ push COMPARES and ALTERS. It can drop a column it believes is
   //    unwanted. Acceptable while the schema is still moving; switch to
   //    `prisma migrate deploy` once it settles and the data matters.
-  run('npx prisma db push --skip-generate --accept-data-loss=false');
+  run('npx prisma db push --skip-generate');
 
   // CITEXT, the search vector column, GIN and trigram indexes. Idempotent.
   run('node scripts/apply-post-migrate.mjs');

@@ -150,7 +150,7 @@ export function ChannelList({
             <bdi dir="auto" className={`truncate text-sm ${c.unreadCount > 0 ? 'font-semibold' : ''}`}>
               {label(c)}
             </bdi>
-            <time className="shrink-0 text-[11px] text-[var(--muted)]">
+            <time suppressHydrationWarning className="shrink-0 text-[11px] text-[var(--muted)]">
               {shortTime(c.lastMessageAt, locale)}
             </time>
           </span>

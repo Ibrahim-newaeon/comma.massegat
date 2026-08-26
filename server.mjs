@@ -53,7 +53,7 @@ try {
   console.warn('> object storage unreachable — file features will not work:', e.message);
 }
 
-httpServer.listen(port, () => {
+httpServer.listen(port, "0.0.0.0", () => {
   console.log(`> ready on http://localhost:${port}`);
   console.log(`> socket.io mounted at /socket.io`);
 });

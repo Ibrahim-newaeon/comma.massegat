@@ -222,3 +222,87 @@ body {
   /* Still marks the target, without the pulse. */
   .flash-highlight { animation: none; background-color: var(--accent-subtle); }
 }
+
+
+/* ── per-script typography ──────────────────────────────────────────────────
+   The reason this layout exists.
+
+   Arabic glyphs are optically smaller at the same point size and their
+   ascenders and descenders reach further, so Arabic needs both a size bump and
+   materially more leading than Latin. Every tool that mirrors an English
+   design uses ONE scale for both, which is why Arabic looks cramped in all of
+   them.
+
+   :lang() applies per RUN, not per element — so a sentence that switches
+   script halfway is set correctly on both halves inside one paragraph. That is
+   the case this whole design is for.
+   -------------------------------------------------------------------------- */
+.msg-text {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+
+.msg-text:lang(ar),
+[lang="ar"] .msg-text,
+.msg-text bdi:lang(ar) {
+  font-size: 1.0rem;
+  line-height: 1.9;
+  /* Arabic must NEVER be tracked. Letter-spacing breaks the joins between
+     glyphs, which is closer to a spelling error than a style choice. */
+  letter-spacing: 0;
+}
+
+/* Day separators between message groups. The gutter carries the clock; the
+   day is stated once rather than repeated on every row. */
+.day-rule {
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  margin: 1.5rem 0 0.5rem;
+}
+.day-rule span {
+  grid-column: 2;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Structural marks — edits, replies, unread — take the brand crimson.
+   In Arabic manuscripts red ink marks STRUCTURE, never emphasis of the text
+   itself, and it is used the same way here. */
+:root { --rubric: #C42340; }
+[data-theme="dark"] { --rubric: #F0566C; }
+@media (prefers-color-scheme: dark) {
+  [data-theme="system"] { --rubric: #F0566C; }
+}
+
+/* Message block. Not a bubble — no tail, logical padding only.
+   fit-content is load-bearing: a full-width block lets an LTR run drift to
+   the far edge in an RTL shell, away from its own sender rule. */
+.msg-block {
+  inline-size: fit-content;
+  max-inline-size: min(65ch, 100%);
+  padding-inline: 0.75rem;
+  border-start-end-radius: 0.5rem;
+  border-end-end-radius: 0.5rem;
+  background: color-mix(in srgb, var(--sender-color) 8%, transparent);
+}
+[data-theme="dark"] .msg-block {
+  background: color-mix(in srgb, var(--sender-color) 14%, transparent);
+}
+
+/* Message block. Not a bubble — no tail, logical padding only.
+   fit-content is load-bearing: a full-width block lets an LTR run drift to
+   the far edge in an RTL shell, away from its own sender rule. */
+.msg-block {
+  inline-size: fit-content;
+  max-inline-size: min(65ch, 100%);
+  padding-block: 0.375rem;
+  padding-inline: 0.75rem;
+  border-start-end-radius: 0.5rem;
+  border-end-end-radius: 0.5rem;
+  background: color-mix(in srgb, var(--sender-color) 8%, transparent);
+}
+[data-theme="dark"] .msg-block {
+  background: color-mix(in srgb, var(--sender-color) 14%, transparent);
+}

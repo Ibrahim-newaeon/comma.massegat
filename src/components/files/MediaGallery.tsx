@@ -179,7 +179,7 @@ export function MediaGallery({
                   <span className="force-ltr ms-2">{formatBytes(it.sizeBytes)}</span>
                 </span>
               </span>
-              <time className="shrink-0 text-[11px] text-[var(--muted)]">
+              <time suppressHydrationWarning className="shrink-0 text-[11px] text-[var(--muted)]">
                 {formatDateTime(new Date(it.createdAt), locale)}
               </time>
             </button>

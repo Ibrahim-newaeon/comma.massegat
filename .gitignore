@@ -6,3 +6,10 @@ node_modules
 /playwright-report
 *.tsbuildinfo
 next-env.d.ts
+docker-compose.override.yml
+.env.*
+!.env.example
+*.bak
+*.bak2
+*.pre-color
+prisma/migrations/

@@ -89,8 +89,27 @@ const rd = parseHostPort(envVars.REDIS_URL ?? '', 6379);
 if (pg) results.push(await probe(pg.host, pg.port, `PostgreSQL (${pg.host}:${pg.port})`));
 if (rd) results.push(await probe(rd.host, rd.port, `Redis (${rd.host}:${rd.port})`));
 
-const s3 = parseHostPort(envVars.S3_ENDPOINT ?? '', 9000);
+const s3url = envVars.S3_ENDPOINT ?? '';
+const s3 = parseHostPort(s3url, s3url.startsWith('https:') ? 443 : 9000);
 if (s3) results.push(await probe(s3.host, s3.port, `Object storage (${s3.host}:${s3.port})`));
+
+// A TCP probe proves a port answers — not that it is YOUR port. A production
+// DATABASE_URL passes every reachability check and reports perfectly healthy.
+const isLocalHost = (h) =>
+  h === 'localhost' || h === '127.0.0.1' || h === '::1' ||
+  h === '0.0.0.0' || h === 'host.docker.internal' || h.endsWith('.local');
+
+if (envVars.NODE_ENV !== 'production' && process.env.ALLOW_REMOTE_DEPS !== '1') {
+  for (const [name, parsed] of [['DATABASE_URL', pg], ['REDIS_URL', rd], ['S3_ENDPOINT', s3]]) {
+    if (parsed && !isLocalHost(parsed.host)) {
+      problems.push(
+        name + ' points at a REMOTE host (' + parsed.host + ') while NODE_ENV is not production.\n' +
+        '    This is almost certainly production infrastructure. Refusing to continue.\n' +
+        '    If deliberate, re-run with ALLOW_REMOTE_DEPS=1'
+      );
+    }
+  }
+}
 
 for (const r of results) {
   if (!r.up) problems.push(`${r.label} is not reachable.  Run: docker compose up -d postgres redis`);
@@ -123,7 +142,7 @@ if (envVars.CLAMAV_ENABLED !== 'false') {
 // The SFU is a WARNING, not an error: chat and files work without it.
 {
   let lkHost = 'localhost', lkPort = 7880;
-  try { const u = new URL(envVars.LIVEKIT_URL ?? ''); lkHost = u.hostname; lkPort = Number(u.port) || 7880; } catch { /* defaults */ }
+  try { const u = new URL(envVars.LIVEKIT_URL ?? ''); lkHost = u.hostname; lkPort = Number(u.port) || (u.protocol === 'wss:' || u.protocol === 'https:' ? 443 : 7880); } catch { /* defaults */ }
   const lk = await probe(lkHost, lkPort, 'LiveKit');
   if (!lk.up) {
     warnings.push(

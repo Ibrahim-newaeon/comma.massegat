@@ -2,6 +2,7 @@
 export const runtime = 'nodejs';
 
 import { z } from 'zod';
+import { PALETTE_SIZE } from '@/lib/ui/senderColor';
 import { env } from '@/env';
 import { prisma } from '@/lib/db';
 import { authorize } from '@/lib/authorize';
@@ -18,6 +19,7 @@ const CreateUserSchema = z.object({
   displayNameAr: z.string().max(120).optional(),
   role: z.enum(['member', 'moderator', 'admin']),
   locale: z.enum(['en', 'ar']).default('en'),
+  colorIndex: z.number().int().min(0).max(PALETTE_SIZE - 1).nullable().optional(),
 });
 
 export async function GET() {

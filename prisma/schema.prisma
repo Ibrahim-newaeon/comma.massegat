@@ -28,6 +28,11 @@ model User {
   /// admin invitation in the audit trail, where it matters.
   createdVia         String    @default("admin") @map("created_via")
   numeralPref        String    @default("latn") @map("numeral_pref")
+
+  /// Index into the sender palette. NULL = derive from the user id, which is
+  /// what every existing account does. An index, not a hex value, so the brand
+  /// palette and its verified contrast ratios hold.
+  colorIndex         Int?      @map("color_index")
   isActive           Boolean   @default(true) @map("is_active")
   mustChangePassword Boolean   @default(true) @map("must_change_password")
   totpSecretEnc      String?   @map("totp_secret_enc")

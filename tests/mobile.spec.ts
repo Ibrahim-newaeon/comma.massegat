@@ -1,4 +1,17 @@
 
+import { test, expect, type Page } from '@playwright/test';
+import { LoginPage } from './pages/LoginPage';
+
+const ADMIN_EMAIL = process.env.TEST_ADMIN_EMAIL ?? 'admin@example.com';
+const ADMIN_PASSWORD = process.env.TEST_ADMIN_PASSWORD ?? 'change-this-immediately-please';
+
+async function login(page: Page) {
+  const lp = new LoginPage(page);
+  await lp.goto();
+  await lp.login(ADMIN_EMAIL, ADMIN_PASSWORD);
+  await page.goto('/chat');
+  await expect(page.getByTestId('message-list')).toBeVisible({ timeout: 15_000 });
+}
 test.describe('Mobile — reaching profile and sign-out', () => {
   test.use({ viewport: { width: 390, height: 844 } });
 
