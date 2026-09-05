@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(npm ci)",
+      "Bash(npm run preflight)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run lint)",
+      "Bash(npm run build)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)"
+    ],
+    "ask": [
+      "Bash(npm run db:setup)",
+      "Bash(npx prisma migrate dev:*)",
+      "Bash(docker compose up:*)",
+      "Bash(git push:*)",
+      "Bash(npm run test:e2e)",
+      "Bash(npm run purge:*)",
+      "Bash(npm run deploy:migrate:*)",
+      "Bash(npm run setup:network:*)",
+      "Bash(npm run setup:tunnel:*)",
+      "Bash(npm run db:*)"
+    ],
+    "deny": [
+      "Read(**/.env)",
+      "Read(**/.env.local)",
+      "Read(**/.env.production)",
+      "Bash(npx prisma migrate reset:*)",
+      "Bash(npx prisma migrate deploy:*)",
+      "Bash(docker compose down -v:*)",
+      "Bash(git push --force:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(rm -rf:*)",
+      "Read(**/.env.*.local)",
+      "Read(**/.env.staging)",
+      "Read(**/.dev.vars)",
+      "Read(**/.dev.vars.*)"
+    ]
+  }
+}

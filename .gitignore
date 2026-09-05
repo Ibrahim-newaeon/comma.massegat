@@ -13,3 +13,7 @@ docker-compose.override.yml
 *.bak2
 *.pre-color
 prisma/migrations/
+
+# Personal Claude Code overrides
+.claude/settings.local.json
+CLAUDE.local.md
